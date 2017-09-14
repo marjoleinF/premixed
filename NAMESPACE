@@ -1,0 +1,6 @@
+S3method("print", "premixed")
+
+export("premixed")
+
+import("pre")
+import("glmertree")
