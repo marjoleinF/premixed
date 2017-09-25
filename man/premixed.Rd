@@ -5,12 +5,15 @@
 \title{Fitting a prediction rule ensemble with clustered data}
 \usage{
 premixed(formula, cluster = NULL, data, penalty.par.val = "lambda.min",
-  learnrate = 0, use.grad = FALSE, conv.thresh = 0.5,
-  family = "gaussian", max.iter = 1000, ...)
+  learnrate = 0, use.grad = FALSE, conv.thresh = 0.01,
+  family = "gaussian", ridge.ranef = TRUE, max.iter = 1000, ...)
 }
 \arguments{
-\item{formula}{a Formula object with three-part right-hand side like 
-y ~ 1 | cluster | x1 + x2 + x3}
+\item{formula}{a formula with three-part right-hand side, like 
+\code{y ~ 1 | cluster | x1 + x2 + x3}; or with one-part right hand side, like
+\code{y ~ x1 + x2 + x3}. In the latter case, the cluster indicator must
+be specified through the \code{cluster} argument.
+#' @param data a dataframe containing the variables in the model}
 
 \item{cluster}{optional string supplying the name of the cluster indicator. If specified,
 \code{formula} should not involve random effects (e.g., 
@@ -19,7 +22,7 @@ not be estimated during tree induction. This will substantially speed up
 computations, but may yield a less accurate model, depending on the magnitude
 of the random effects.}
 
-\item{data}{a dataframe containing the variables in the model}
+\item{data}{dataframe containing the variables specified in \code{formula}.}
 
 \item{penalty.par.val}{as usual.}
 
@@ -32,7 +35,12 @@ criterion. The algorithm converges if the maximum absolute difference in
 the random-effects coefficients from one iteration is smaller than 
 \code{conv.thresh}.}
 
-\item{family}{as usual.}
+\item{family}{as usual. Note: should be a character vector!}
+
+\item{ridge.ranef}{logical vector of length 1. Should random effects be
+estimated using a ridge penalty paramater? If set to \code{FALSE}, random
+effects will be estimated through fitting a mixed-effects regression model
+using function \code{\link[lme4]{lmer}} or \code{\link[lme4]{glmer}}.}
 
 \item{max.iter}{numeric vector of length 1. Maximum number of iterations
 performed to re-estimate fixed and random effects parameters.}
@@ -53,6 +61,58 @@ The model involves a random intercept only.
 \code{premixed} is a wrapper for fitting a PRe with clustered data
 }
 \examples{
-\donttest{set.seed(42)
+\donttest{
+data(DepressionDemo, package = "glmertree")
+
+
+## Employ glmertree for rule induction and iterate between lasso for
+## estimating fixed effects and ridge for estimating random effects:
+set.seed(42)
+airq <- airquality[complete.cases(airquality),]
+airq.ens1 <- premixed(Ozone ~ 1 | Month | Solar.R + Wind + Temp + Day, data = airq, ntrees = 10)
+airq.ens1
+
+
+## Employ glmertree for rule induction and iterate between lasso for
+## estimating fixed effects and glmer for estimating random effects:
+set.seed(42)
+airq.ens2 <- premixed(Ozone ~ 1 | Month | Solar.R + Wind + Temp + Day,
+                      data = airq, ridge.ranef = FALSE, ntrees = 10)
+airq.ens2
+
+
+## Employ ctree with blocked bootstrap sampling for rule induction:
+##
+## First create a sampling function that bootstrap samples whole clusters:
+bb_sampfunc <- function(cluster = airq$Month) {
+  result <- c()
+  for(i in sample(unique(cluster), replace = TRUE)) {
+    result <- c(result, which(cluster == i))
+  }
+  result
 }
+## And then fit the PRE:
+library(pre)
+set.seed(42)
+airq.ens3 <- pre(Ozone ~ ., data = airq, sampfrac = bb_sampfunc)
+airq.ens3
+
+
+## Employ ctree with blocked subsampling for rule induction:
+##
+## First create a function that creates subsamples containing ~75\% of the clusters: 
+ss_sampfunc <- function(cluster = airq$Month, sampfrac = .75) {
+  result <- c()
+  n_clusters <- round(length(unique(cluster)) * sampfrac)
+  for(i in sample(unique(cluster), size = n_clusters, replace = FALSE)) {
+    result <- c(result, which(cluster == i))
+  }
+  result
+}
+## And then fit the PRE:
+library(pre)
+set.seed(42)
+airq.ens4 <- pre(Ozone ~ ., data = airq, sampfrac = ss_sampfunc)
+airq.ens4
+}   
 }

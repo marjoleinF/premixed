@@ -4,3 +4,7 @@ export("premixed")
 
 import("pre")
 import("glmertree")
+import("lme4")
+import("glmnet")
+
+importFrom("stats", "coef", "predict")
