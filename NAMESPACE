@@ -1,4 +1,6 @@
 S3method("print", "premixed")
+S3method("predict", "premixed")
+S3method("coef", "premixed")
 
 export("premixed")
 

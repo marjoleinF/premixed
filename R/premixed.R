@@ -36,9 +36,8 @@
 #' The model involves a random intercept only.
 #' @return An object of class 'premixed'.
 #' @examples \donttest{
-#' data(DepressionDemo, package = "glmertree")
 #' 
-#' 
+#'   
 #' ## Employ glmertree for rule induction and iterate between lasso for
 #' ## estimating fixed effects and ridge for estimating random effects:
 #' set.seed(42)
@@ -143,7 +142,7 @@ premixed <- function(formula, cluster = NULL, data, penalty.par.val = "lambda.mi
                          alpha = 0, standardize = FALSE, offset = fixef_preds, 
                          intercept = FALSE, family = family)
       ranef_preds <- predict(ranef, newx = ranef_des_mat, s = "lambda.min", 
-                             offset = 0, type = "link")
+                             newoffset = 0, type = "link")
       ranef1[[iteration]] <- coef(ranef, s = "lambda.min")
     } else {
       y_name <- all.vars(formula, max.names = 1)
@@ -167,10 +166,11 @@ premixed <- function(formula, cluster = NULL, data, penalty.par.val = "lambda.mi
                        family = family)
     if (ridge.ranef) {
       fixef_preds <- predict(fixef, newx = pre_mod$modmat, s = "lambda.min", 
-                            offset = 0, type = "link")
+                             newoffset = 0, type = "link")
     } else {
-      glmer_data$fixef_preds <- predict(fixef, newx = pre_mod$modmat, s = "lambda.min", 
-                             offset = 0, type = "link")
+      glmer_data$fixef_preds <- predict(fixef, newx = pre_mod$modmat, 
+                                        s = "lambda.min", newoffset = 0, 
+                                        type = "link")
     }
     fixef1[[iteration]] <- coef(fixef, s = "lambda.min")
     if (iteration > 1) {
@@ -190,6 +190,7 @@ premixed <- function(formula, cluster = NULL, data, penalty.par.val = "lambda.mi
   return(result)
 }
 
+
 print.premixed <- function(x, ...) {
   if ( (is.null(x$call$max.iter) && x$iterations == 1000) || 
       (!is.null(x$call$max.iter) && x$iterations == x$call$max.iter) ) {
@@ -200,6 +201,54 @@ print.premixed <- function(x, ...) {
   pre:::print.pre(x$pre, ...)
 }
 
-#predict.cluster.pre <- function()
-#coef.cluster.pre <- function()
-#ranef.cluster.pre <- function()
+
+#' Return predicted values based on a mixed-effects prediction rule ensemble.
+#' 
+#' \code{predict.premixed} returns predicted values based on the estimated
+#' fixed effects of a a mixed-effects prediction rule ensemble (random 
+#' effects are NOT included in the predictions (yet)). 
+#' 
+#' @param object an object of class 'premixed'.
+#' @param offset Offset value to be used in generating predictions. Note that
+#' the predictions are returned for the fixed effects only.
+#' @param ... further arguments to be passed to \code{\link[pre]{predict.pre}}
+#' 
+#' @examples \donttest{
+#' ## Employ glmertree for rule induction and iterate between lasso for
+#' ## estimating fixed effects and ridge for estimating random effects:
+#' set.seed(42)
+#' airq <- airquality[complete.cases(airquality),]
+#' airq.ens1 <- premixed(Ozone ~ 1 | Month | Solar.R + Wind + Temp + Day, data = airq, ntrees = 10)
+#' predict(airq.ens1, newdata = airq)
+#' }
+predict.premixed <- function(object, offset = 0, ...) {
+  predict(object$pre, newoffset = offset, ...)
+}
+
+
+#' Return estimated fixed-effects coefficients from a mixed-effects prediction
+#' rule ensemble
+#' 
+#' \code{coef.premixed} returns the estimated fixed-effects coefficients from 
+#' a mixed-effects prediction rule ensemble
+#' 
+#' @param object an object of class 'premixed'.
+#' @param ... further arguments to be passed to \code{\link[pre]{coef.pre}}.
+#' 
+coef.premixed <- function(object, ...) {
+  coef(object$pre, ...)
+}
+  
+
+#' #' Return predicted random-effects coefficients from a mixed-effects prediction 
+#' #' rule ensemble
+#' #' 
+#' #' \code{ranef.premixed} returns the predicted random-effects coefficients from a 
+#' #' mixed-effects prediction rule ensemble.
+#' #' 
+#' #' @param object an object of class'premixed'.
+#' #' @param ... currently not used.
+#' ranef.premixed <- function(object, ...) {
+#'   ## Print statement on how coefficients were estimated / predicted
+#'   object$ranef1
+#' }

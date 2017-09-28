@@ -62,9 +62,8 @@ The model involves a random intercept only.
 }
 \examples{
 \donttest{
-data(DepressionDemo, package = "glmertree")
 
-
+  
 ## Employ glmertree for rule induction and iterate between lasso for
 ## estimating fixed effects and ridge for estimating random effects:
 set.seed(42)
