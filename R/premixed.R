@@ -198,7 +198,7 @@ print.premixed <- function(x, ...) {
   } else {
     cat("\nEstimation of random and fixed effects parameters converged after", x$iterations, "iterations.\n")
   }
-  pre:::print.pre(x$pre, ...)
+  print(x$pre, ...)
 }
 
 
@@ -240,15 +240,15 @@ coef.premixed <- function(object, ...) {
 }
   
 
-#' #' Return predicted random-effects coefficients from a mixed-effects prediction 
-#' #' rule ensemble
-#' #' 
-#' #' \code{ranef.premixed} returns the predicted random-effects coefficients from a 
-#' #' mixed-effects prediction rule ensemble.
-#' #' 
-#' #' @param object an object of class'premixed'.
-#' #' @param ... currently not used.
-#' ranef.premixed <- function(object, ...) {
-#'   ## Print statement on how coefficients were estimated / predicted
-#'   object$ranef1
-#' }
+#' Return predicted random-effects coefficients from a mixed-effects prediction 
+#' rule ensemble
+#' 
+#' \code{ranef.premixed} returns the predicted random-effects coefficients from a 
+#' mixed-effects prediction rule ensemble.
+#' 
+#' @param object an object of class'premixed'.
+#' @param ... currently not used.
+ranef.premixed <- function(object, ...) {
+  ## Add printed statement on how coefficients were estimated / predicted
+  object$ranef1
+}
