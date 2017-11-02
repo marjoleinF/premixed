@@ -4,6 +4,7 @@ S3method("coef", "premixed")
 S3method("ranef", "premixed")
 
 export("premixed")
+export("complexity")
 
 import("pre")
 import("glmertree")

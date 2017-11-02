@@ -6,7 +6,7 @@
 \usage{
 premixed(formula, cluster = NULL, data, penalty.par.val = "lambda.min",
   learnrate = 0, use.grad = FALSE, conv.thresh = 0.01,
-  family = "gaussian", ridge.ranef = TRUE, max.iter = 1000, ...)
+  family = "gaussian", ridge.ranef = FALSE, max.iter = 1000, ...)
 }
 \arguments{
 \item{formula}{a formula with three-part right-hand side, like 
@@ -15,12 +15,12 @@ premixed(formula, cluster = NULL, data, penalty.par.val = "lambda.min",
 be specified through the \code{cluster} argument.
 #' @param data a dataframe containing the variables in the model}
 
-\item{cluster}{optional string supplying the name of the cluster indicator. If specified,
-\code{formula} should not involve random effects (e.g., 
-\code{y ~ x1+ x2 + x3}). If \code{cluster} is specified, random effects will
-not be estimated during tree induction. This will substantially speed up 
-computations, but may yield a less accurate model, depending on the magnitude
-of the random effects.}
+\item{cluster}{optional character string supplying the name of the cluster 
+indicator. If specified, \code{formula} should not involve random effects 
+(e.g., \code{y ~ x1+ x2 + x3}). If \code{cluster} is specified, random 
+effects will not be estimated during tree induction. This will substantially 
+speed up computations, but may yield a less accurate model, depending on the 
+magnitude of the random effects.}
 
 \item{data}{dataframe containing the variables specified in \code{formula}.}
 
@@ -32,13 +32,15 @@ of the random effects.}
 
 \item{conv.thresh}{numeric vector of length 1, specifies the convergence
 criterion. The algorithm converges if the maximum absolute difference in 
-the random-effects coefficients from one iteration is smaller than 
+random-effects predictions from one iteration is smaller than 
 \code{conv.thresh}.}
 
 \item{family}{as usual. Note: should be a character vector!}
 
 \item{ridge.ranef}{logical vector of length 1. Should random effects be
-estimated using a ridge penalty paramater? If set to \code{FALSE}, random
+estimated through a ridge regression? If set to \code{TRUE}, random effects 
+will be estimated through fitting a ridge regression model using function 
+\code{\link[glmnet]{cv.glmnet}}. If set to \code{FALSE}, random
 effects will be estimated through fitting a mixed-effects regression model
 using function \code{\link[lme4]{lmer}} or \code{\link[lme4]{glmer}}.}
 
@@ -51,11 +53,23 @@ performed to re-estimate fixed and random effects parameters.}
 An object of class 'premixed'.
 }
 \description{
-Experimental function, use at own risk. Estimates rules by 
-using function glmertree(). Estimates random- and fixed-effects coefficients
-by iterating between lasso estimation of the fixed-effects (i.e., rules 
-and/or linear terms) and ridge estimation of the random-effects predictions.
-The model involves a random intercept only.
+Experimental function for fitting mixed-effects prediction rule
+ensembles. Estimates a random intercept in addition to a prediction rule 
+ensemble. This allows for analysing datasets with a clustered or multilevel
+structure, or longitudinal datasets. Experimental, so use at own risk. 
+
+Function premixed() allows for taking into account a random intercept in I) 
+rule induction and/or II) coefficient estimation. To take into account the 
+random intercept in both rule induction and coefficient estimation, see 
+Example 1 below. To take into account the random intercept only in 
+coefficient estimation, see Example 2 below. Alternatively, it has been 
+suggested that random effects do not need to be taken into account
+explicitly but only through employing a blocked bootstrap or subampling 
+approach, see Exemple 3 below. Note that approaches / examples 1 and 2 can 
+be combined with the third approach / example 3. See Example 4 below. 
+
+Note that random intercept-only models are currently supported. That is, 
+random slopes can currently not be specified.
 }
 \details{
 \code{premixed} is a wrapper for fitting a PRe with clustered data
@@ -63,25 +77,24 @@ The model involves a random intercept only.
 \examples{
 \donttest{
 
-  
-## Employ glmertree for rule induction and iterate between lasso for
-## estimating fixed effects and ridge for estimating random effects:
+## Example 1: Take into account clustered structure in rule induction
+## as well as coeficient estimation: 
 set.seed(42)
 airq <- airquality[complete.cases(airquality),]
 airq.ens1 <- premixed(Ozone ~ 1 | Month | Solar.R + Wind + Temp + Day, data = airq, ntrees = 10)
 airq.ens1
 
 
-## Employ glmertree for rule induction and iterate between lasso for
-## estimating fixed effects and glmer for estimating random effects:
+## Example 2: Take into account clustered stucture in coefficient estimation
+## only:
 set.seed(42)
-airq.ens2 <- premixed(Ozone ~ 1 | Month | Solar.R + Wind + Temp + Day,
-                      data = airq, ridge.ranef = FALSE, ntrees = 10)
-airq.ens2
+airq <- airquality[complete.cases(airquality),]
+airq.ens1 <- premixed(Ozone ~ 1 | Month | Solar.R + Wind + Temp + Day, data = airq, ntrees = 10)
+airq.ens1
 
 
-## Employ ctree with blocked bootstrap sampling for rule induction:
-##
+
+
 ## First create a sampling function that bootstrap samples whole clusters:
 bb_sampfunc <- function(cluster = airq$Month) {
   result <- c()
@@ -113,5 +126,21 @@ library(pre)
 set.seed(42)
 airq.ens4 <- pre(Ozone ~ ., data = airq, sampfrac = ss_sampfunc)
 airq.ens4
+
+
+## Employ ctree with blocked bootstrapsampling for rule inducation,
+## and include random effects only in estimation of the final ensemble:
+bb_sampfunc <- function(cluster = airq$Month) {
+  result <- c()
+  for(i in sample(unique(cluster), replace = TRUE)) {
+    result <- c(result, which(cluster == i))
+  }
+  result
+}
+set.seed(42)
+airq.ens5 <- premixed(Ozone ~ Solar.R + Wind + Temp + Day, cluster = "Month", 
+  data = airq, sampfrac = bb_sampfunc)
+airq.ens5
+
 }   
 }

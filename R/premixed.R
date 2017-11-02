@@ -8,54 +8,68 @@
 #' be specified through the \code{cluster} argument.
 #' #' @param data a dataframe containing the variables in the model
 #' @param data dataframe containing the variables specified in \code{formula}.
-#' @param cluster optional string supplying the name of the cluster indicator. If specified,
-#' \code{formula} should not involve random effects (e.g., 
-#' \code{y ~ x1+ x2 + x3}). If \code{cluster} is specified, random effects will
-#' not be estimated during tree induction. This will substantially speed up 
-#' computations, but may yield a less accurate model, depending on the magnitude
-#' of the random effects.
+#' @param cluster optional character string supplying the name of the cluster 
+#' indicator. If specified, \code{formula} should not involve random effects 
+#' (e.g., \code{y ~ x1+ x2 + x3}). If \code{cluster} is specified, random 
+#' effects will not be estimated during tree induction. This will substantially 
+#' speed up computations, but may yield a less accurate model, depending on the 
+#' magnitude of the random effects.
 #' @param conv.thresh numeric vector of length 1, specifies the convergence
 #' criterion. The algorithm converges if the maximum absolute difference in 
-#' the random-effects coefficients from one iteration is smaller than 
+#' random-effects predictions from one iteration is smaller than 
 #' \code{conv.thresh}.
 #' @param penalty.par.val as usual.
 #' @param learnrate as usual.
 #' @param use.grad as usual.
 #' @param family as usual. Note: should be a character vector!
 #' @param ridge.ranef logical vector of length 1. Should random effects be
-#' estimated using a ridge penalty paramater? If set to \code{FALSE}, random
+#' estimated through a ridge regression? If set to \code{TRUE}, random effects 
+#' will be estimated through fitting a ridge regression model using function 
+#' \code{\link[glmnet]{cv.glmnet}}. If set to \code{FALSE}, random
 #' effects will be estimated through fitting a mixed-effects regression model
-#' using function \code{\link[lme4]{lmer}} or \code{\link[lme4]{glmer}}.
+#' using function \code{\link[lme4]{lmer}} or \code{\link[lme4]{glmer}}. 
 #' @param max.iter numeric vector of length 1. Maximum number of iterations
 #' performed to re-estimate fixed and random effects parameters. 
 #' @param ... further arguments to be passed to \code{\link[pre]{pre}}.
-#' @description Experimental function, use at own risk. Estimates rules by 
-#' using function glmertree(). Estimates random- and fixed-effects coefficients
-#' by iterating between lasso estimation of the fixed-effects (i.e., rules 
-#' and/or linear terms) and ridge estimation of the random-effects predictions.
-#' The model involves a random intercept only.
+#' @description Experimental function for fitting mixed-effects prediction rule
+#' ensembles. Estimates a random intercept in addition to a prediction rule 
+#' ensemble. This allows for analysing datasets with a clustered or multilevel
+#' structure, or longitudinal datasets. Experimental, so use at own risk. 
+#' 
+#' Function premixed() allows for taking into account a random intercept in I) 
+#' rule induction and/or II) coefficient estimation. To take into account the 
+#' random intercept in both rule induction and coefficient estimation, see 
+#' Example 1 below. To take into account the random intercept only in 
+#' coefficient estimation, see Example 2 below. Alternatively, it has been 
+#' suggested that random effects do not need to be taken into account
+#' explicitly but only through employing a blocked bootstrap or subampling 
+#' approach, see Exemple 3 below. Note that approaches / examples 1 and 2 can 
+#' be combined with the third approach / example 3. See Example 4 below. 
+#' 
+#' Note that random intercept-only models are currently supported. That is, 
+#' random slopes can currently not be specified.
+#'  
 #' @return An object of class 'premixed'.
 #' @examples \donttest{
 #' 
-#'   
-#' ## Employ glmertree for rule induction and iterate between lasso for
-#' ## estimating fixed effects and ridge for estimating random effects:
+#' ## Example 1: Take into account clustered structure in rule induction
+#' ## as well as coeficient estimation: 
 #' set.seed(42)
 #' airq <- airquality[complete.cases(airquality),]
 #' airq.ens1 <- premixed(Ozone ~ 1 | Month | Solar.R + Wind + Temp + Day, data = airq, ntrees = 10)
 #' airq.ens1
 #' 
 #' 
-#' ## Employ glmertree for rule induction and iterate between lasso for
-#' ## estimating fixed effects and glmer for estimating random effects:
+#' ## Example 2: Take into account clustered stucture in coefficient estimation
+#' ## only:
 #' set.seed(42)
-#' airq.ens2 <- premixed(Ozone ~ 1 | Month | Solar.R + Wind + Temp + Day,
-#'                       data = airq, ridge.ranef = FALSE, ntrees = 10)
-#' airq.ens2
+#' airq <- airquality[complete.cases(airquality),]
+#' airq.ens1 <- premixed(Ozone ~ 1 | Month | Solar.R + Wind + Temp + Day, data = airq, ntrees = 10)
+#' airq.ens1
 #' 
 #' 
-#' ## Employ ctree with blocked bootstrap sampling for rule induction:
-#' ##
+#' 
+#' 
 #' ## First create a sampling function that bootstrap samples whole clusters:
 #' bb_sampfunc <- function(cluster = airq$Month) {
 #'   result <- c()
@@ -87,34 +101,68 @@
 #' set.seed(42)
 #' airq.ens4 <- pre(Ozone ~ ., data = airq, sampfrac = ss_sampfunc)
 #' airq.ens4
+#' 
+#' 
+#' ## Employ ctree with blocked bootstrapsampling for rule inducation,
+#' ## and include random effects only in estimation of the final ensemble:
+#' bb_sampfunc <- function(cluster = airq$Month) {
+#'   result <- c()
+#'   for(i in sample(unique(cluster), replace = TRUE)) {
+#'     result <- c(result, which(cluster == i))
+#'   }
+#'   result
+#' }
+#' set.seed(42)
+#' airq.ens5 <- premixed(Ozone ~ Solar.R + Wind + Temp + Day, cluster = "Month", 
+#'   data = airq, sampfrac = bb_sampfunc)
+#' airq.ens5
+#' 
 #' }   
 #' @export
+#' 
+#' 
+# library(pre)
+# library(glmnet)
+# library(lme4)
+# formula <- Ozone ~ Solar.R + Wind + Temp + Day 
+# cluster <- "Month"
+# data <- airquality[complete.cases(airquality),]
+# penalty.par.val = "lambda.min"
+# learnrate=0
+# use.grad=F
+# conv.thresh=.01
+# family="gaussian"
+# ridge.ranef = TRUE
+# max.iter=1000
+
 premixed <- function(formula, cluster = NULL, data, penalty.par.val = "lambda.min", 
                         learnrate = 0, use.grad = FALSE, conv.thresh = .01, 
-                        family = "gaussian", ridge.ranef = TRUE, max.iter = 1000, ...) {
+                        family = "gaussian", ridge.ranef = FALSE, max.iter = 1000, ...) {
   cat("estimating rules...\n")
   ## TODO: implement different types:
   # 1) Take into account ranefs in tree estimation: a) glmertree, or b) ctree with blocked bootstrap sampling
   # 2) Take into account ranefs in coef estimation
-  ## TODO: implement blocked bootstrap sampling 
+  ## TODO: implement blocked bootstrap sampling
   pre_mod <- pre(formula = formula, data = data, learnrate = learnrate,
-                 use.grad = use.grad, family = family, ...)
+                 use.grad = use.grad, family = family)#, ...)
   if (is.null(cluster)) {
     cluster_name <- as.character(formula[[3]][[2]][[3]])
     if (ridge.ranef) {
-      cluster <- data.frame(factor(pre_mod$data[, cluster_name]))
+      cluster <- data.frame(factor(data[, cluster_name]))
+      names(cluster) <- cluster_name
     } else {
       y_name <- all.vars(formula, max.names = 1)
       glmer_data <- data.frame(data[y_name], cluster = data[,cluster_name])
     }
   } else {
+    cluster_name <- cluster
     if (ridge.ranef) {
-      cluster <- data.frame(factor(cluster))
+      cluster <- data.frame(factor(data[,cluster_name]))
+      names(cluster) <- cluster_name
     } else {
       y_name <- all.vars(formula, max.names = 1)
-      glmer_data <- data.frame(data[y_name], cluster = cluster)
+      glmer_data <- data.frame(data[y_name], cluster = data[,cluster_name])
     }
-    cluster_name <- "cluster"
   }
 
   if (ridge.ranef) {
@@ -123,6 +171,8 @@ premixed <- function(formula, cluster = NULL, data, penalty.par.val = "lambda.mi
     fixef_preds <- pre:::predict.pre(pre_mod, penalty.par.val = penalty.par.val)
   } else {
     glmer_data$fixef_preds <- pre:::predict.pre(pre_mod, penalty.par.val = penalty.par.val)
+    glmer_f <- formula(paste0(y_name, " ~ -1 + (1|cluster) + offset(fixef_preds)"))
+    y_name <- all.vars(formula, max.names = 1)
   }
   iteration <- 0
   dif <- conv.thresh + 1
@@ -145,15 +195,12 @@ premixed <- function(formula, cluster = NULL, data, penalty.par.val = "lambda.mi
                              newoffset = 0, type = "link")
       ranef1[[iteration]] <- coef(ranef, s = "lambda.min")
     } else {
-      y_name <- all.vars(formula, max.names = 1)
       if (family == "gaussian") { ## fit lmer:
-        glmer_f <- formula(paste0(y_name, " ~ -1 + (1|cluster) + offset(fixef_preds)"))
         ranef <- lmer(glmer_f, data = glmer_data)
         ranef1[[iteration]] <- ranef(ranef)[[1]]
         glmer_data$fixef_preds <- 0
         ranef_preds <- predict(ranef, newdata = glmer_data)
       } else { ## otherwise, fit glmer:
-        glmer_f <- formula(paste0(y_name, " ~ -1 + (1|cluster) + offset(fixef_preds)"))
         ranef <- glmer(glmer_f, data = glmer_data, family = family)
         ranef1[[iteration]] <- ranef(ranef)[[1]]
         glmer_data$fixef_preds <- 0        
@@ -251,4 +298,64 @@ coef.premixed <- function(object, ...) {
 ranef.premixed <- function(object, ...) {
   ## Add printed statement on how coefficients were estimated / predicted
   object$ranef1
+}
+
+
+
+#' Calculates complexity of a prediction rule ensemble.
+#' 
+#' \code{complexity} returns the complexity (total number of variables in the 
+#' ensemble, number of terms and mean number of variables per term) of a
+#' prediction rule ensembles (i.e., an object of class 'pre' or 'premixed').
+#' 
+#' @param object an object of class 'pre' or premixed'.
+#' @param penalty.par.val As usual.
+#' @param ... not currently used.
+#' 
+#' @examples \donttest{
+#' set.seed(42)
+#' airq <- airquality[complete.cases(airquality),]
+#' airq.ens1 <- premixed(Ozone ~ 1 | Month | Solar.R + Wind + Temp + Day, data = airq, ntrees = 10)
+#' complexity(airq.ens1)
+#' }
+#' 
+#' @return Returns a vector with the total number of variables in the ensemble,
+#' the total number of terms (i.e., baselearners with a non-zero coefficient),
+#' and the mean number of variables per term) in the ensemble.
+complexity <- function(object, penalty.par.val = "lambda.1se", ...) {
+  
+  ## Preliminaries:
+  if (class(object) == "premixed") {
+    object <- object$pre
+  }
+  if (!class(object) == "pre") {
+    stop("Argument object should sprecify an object of class 'pre'.")
+  }
+  
+  ## Get non-zero coefficients:
+  coefs <- coef(object)
+  nonzerocoefs <- coefs[coefs$coefficient != 0,]
+  ## Count average number of variables in terms:
+  mean_no_of_vars <- mean(lengths(
+    regmatches(nonzerocoefs$description[-1], 
+               gregexpr(" & ", nonzerocoefs$description[-1])))) + 1
+  ## Count the number of variables:
+  imps <- importance(object, penalty.par.val = penalty.par.val, 
+                     plot = FALSE)
+  ## Count the number of terms:
+  if (penalty.par.val == "lambda.1se") {
+    lambda_ind <- which(object$glmnet.fit$lambda == object$glmnet.fit$lambda.1se)
+  }
+  if (penalty.par.val == "lambda.min") {
+    lambda_ind <- which(object$glmnet.fit$lambda == object$glmnet.fit$lambda.min)
+  }
+  if (is.numeric(penalty.par.val)) {
+    lambda_ind <- which(abs(object$glmnet.fit$lambda - penalty.par.val) == 
+                          min(abs(object$glmnet.fit$lambda - penalty.par.val)))
+  }
+  nterms <- object$glmnet.fit$nzero[lambda_ind][[1]]
+  nvars <- nrow(imps$varimp)
+  
+  ## Return resultS:
+  c(nvars = nvars, nterms = nterms, mean_no_of_vars = mean_no_of_vars)
 }
