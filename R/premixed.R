@@ -1,7 +1,5 @@
-#' Fitting a prediction rule ensemble with clustered data
+#' Fitting a mixed-effects prediction rule ensemble
 #' 
-#' \code{premixed} is a wrapper for fitting a PRe with clustered data
-#'  
 #' @param formula a formula with three-part right-hand side, like 
 #' \code{y ~ 1 | cluster | x1 + x2 + x3}; or with one-part right hand side, like
 #' \code{y ~ x1 + x2 + x3}. In the latter case, the cluster indicator must
@@ -36,20 +34,27 @@
 #' ensemble. This allows for analysing datasets with a clustered or multilevel
 #' structure, or longitudinal datasets. Experimental, so use at own risk. 
 #' 
-#' Function premixed() allows for taking into account a random intercept in I) 
-#' rule induction and/or II) coefficient estimation. To take into account the 
-#' random intercept in both rule induction and coefficient estimation, see 
+#' @details Function premixed() allows for taking into account a random intercept 
+#' in I) rule induction and/or II) coefficient estimation. To take into account 
+#' the random intercept in both rule induction and coefficient estimation, see 
 #' Example 1 below. To take into account the random intercept only in 
 #' coefficient estimation, see Example 2 below. Alternatively, it has been 
 #' suggested that random effects do not need to be taken into account
 #' explicitly but only through employing a blocked bootstrap or subampling 
-#' approach, see Exemple 3 below. Note that approaches / examples 1 and 2 can 
-#' be combined with the third approach / example 3. See Example 4 below. 
+#' approach, see Examples 3a and 3b below. 
+#' 
+#' Note that approaches / examples 1 and 2 can be combined with the third 
+#' approach / example 3. However, whether employing a cluster bootstrap- or 
+#' subsampling approach is actually sufficient to take info account the clustered
+#' structure is a topic that still needs to be addressed.
 #' 
 #' Note that random intercept-only models are currently supported. That is, 
 #' random slopes can currently not be specified.
 #'  
 #' @return An object of class 'premixed'.
+#' 
+#' @export
+#' 
 #' @examples \donttest{
 #' 
 #' ## Example 1: Take into account clustered structure in rule induction
@@ -58,6 +63,7 @@
 #' airq <- airquality[complete.cases(airquality),]
 #' airq.ens1 <- premixed(Ozone ~ 1 | Month | Solar.R + Wind + Temp + Day, data = airq, ntrees = 10)
 #' airq.ens1
+#' 
 #' 
 #' 
 #' ## Example 2: Take into account clustered stucture in coefficient estimation
@@ -69,8 +75,10 @@
 #' 
 #' 
 #' 
-#' 
-#' ## First create a sampling function that bootstrap samples whole clusters:
+#' ## Example 3a: Take into account clustered structure in rule induction through 
+#' ## bootstrap- or subsampling:
+#'
+#' ## Create a sampling function that bootstrap samples whole clusters:
 #' bb_sampfunc <- function(cluster = airq$Month) {
 #'   result <- c()
 #'   for(i in sample(unique(cluster), replace = TRUE)) {
@@ -78,16 +86,13 @@
 #'   }
 #'   result
 #' }
-#' ## And then fit the PRE:
+#' ## Employ blocked bootstrap sampling function in fitting PRE:
 #' library(pre)
 #' set.seed(42)
-#' airq.ens3 <- pre(Ozone ~ ., data = airq, sampfrac = bb_sampfunc)
-#' airq.ens3
+#' airq.ens3a.bs <- pre(Ozone ~ Solar.R + Wind + Temp + Day, data = airq, sampfrac = bb_sampfunc)
+#' airq.ens3a.bs
 #' 
-#' 
-#' ## Employ ctree with blocked subsampling for rule induction:
-#' ##
-#' ## First create a function that creates subsamples containing ~75% of the clusters: 
+#' ## Create a sampling function that subsamples ~75% of the clusters: 
 #' ss_sampfunc <- function(cluster = airq$Month, sampfrac = .75) {
 #'   result <- c()
 #'   n_clusters <- round(length(unique(cluster)) * sampfrac)
@@ -96,53 +101,41 @@
 #'   }
 #'   result
 #' }
-#' ## And then fit the PRE:
+#' ## Employ cluster subsampling in fitting PRE:
 #' library(pre)
 #' set.seed(42)
-#' airq.ens4 <- pre(Ozone ~ ., data = airq, sampfrac = ss_sampfunc)
-#' airq.ens4
+#' airq.ens3a.ss <- pre(Ozone ~ Solar.R + Wind + Temp + Day, data = airq, sampfrac = ss_sampfunc)
+#' airq.ens3a.ss
 #' 
 #' 
-#' ## Employ ctree with blocked bootstrapsampling for rule inducation,
-#' ## and include random effects only in estimation of the final ensemble:
-#' bb_sampfunc <- function(cluster = airq$Month) {
-#'   result <- c()
-#'   for(i in sample(unique(cluster), replace = TRUE)) {
-#'     result <- c(result, which(cluster == i))
-#'   }
-#'   result
+#' 
+#' ## Example 3b: Take into account clustered structure in both rule induction and
+#' ## coefficient estimation:
+#' 
+#' ## Generate fold ids:
+#' airq <- airquality[complete.cases(airquality),]
+#' foldids <- vector("numeric", length = nrow(airq))
+#' counter <- 0
+#' for (i in unique(airq$Month)) {
+#'   counter <- counter + 1
+#'   foldids[airq$Month == i] <- counter
 #' }
+#' foldids
+#' 
+#' ## Employ clustered bootstrap sampling function for rule induction, as well as 
+#' ## cluster-specific fold ids for estimating coefficients:
 #' set.seed(42)
-#' airq.ens5 <- premixed(Ozone ~ Solar.R + Wind + Temp + Day, cluster = "Month", 
-#'   data = airq, sampfrac = bb_sampfunc)
-#' airq.ens5
+#' airq.ens3b.ss <- pre(Ozone ~ Solar.R + Wind + Temp + Day, data = airq, sampfrac = ss_sampfunc, 
+#'   foldid = foldids)
+#' airq.ens3b.ss
+#' }
 #' 
-#' }   
-#' @export
-#' 
-#' 
-# library(pre)
-# library(glmnet)
-# library(lme4)
-# formula <- Ozone ~ Solar.R + Wind + Temp + Day 
-# cluster <- "Month"
-# data <- airquality[complete.cases(airquality),]
-# penalty.par.val = "lambda.min"
-# learnrate=0
-# use.grad=F
-# conv.thresh=.01
-# family="gaussian"
-# ridge.ranef = TRUE
-# max.iter=1000
-
 premixed <- function(formula, cluster = NULL, data, penalty.par.val = "lambda.min", 
                         learnrate = 0, use.grad = FALSE, conv.thresh = .01, 
                         family = "gaussian", ridge.ranef = FALSE, max.iter = 1000, ...) {
+  
   cat("estimating rules...\n")
-  ## TODO: implement different types:
-  # 1) Take into account ranefs in tree estimation: a) glmertree, or b) ctree with blocked bootstrap sampling
-  # 2) Take into account ranefs in coef estimation
-  ## TODO: implement blocked bootstrap sampling
+
   pre_mod <- pre(formula = formula, data = data, learnrate = learnrate,
                  use.grad = use.grad, family = family)#, ...)
   if (is.null(cluster)) {
