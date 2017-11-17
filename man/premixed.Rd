@@ -5,7 +5,7 @@
 \title{Fitting a mixed-effects prediction rule ensemble}
 \usage{
 premixed(formula, cluster = NULL, data, penalty.par.val = "lambda.min",
-  learnrate = 0, use.grad = FALSE, conv.thresh = 0.01,
+  learnrate = 0, use.grad = FALSE, conv.thresh = 0.001,
   family = "gaussian", ridge.ranef = FALSE, max.iter = 1000, ...)
 }
 \arguments{
@@ -31,9 +31,12 @@ magnitude of the random effects.}
 \item{use.grad}{as usual.}
 
 \item{conv.thresh}{numeric vector of length 1, specifies the convergence
-criterion. The algorithm converges if the maximum absolute difference in 
-random-effects predictions from one iteration is smaller than 
-\code{conv.thresh}.}
+criterion for estimation of the model. If \code{ridge.ranef = FALSE}, it 
+specifies the maximum difference in log-likelihoods of the random-effects 
+model from two consecutive iterations for estimation to converge. If
+\code{ridge.ranef = TRUE}, it specifies the maximum absolute difference in 
+random-effects predictions from two consecutive iterations for estimation
+to converge.}
 
 \item{family}{as usual. Note: should be a character vector!}
 
@@ -92,8 +95,9 @@ airq.ens1
 ## only:
 set.seed(42)
 airq <- airquality[complete.cases(airquality),]
-airq.ens1 <- premixed(Ozone ~ 1 | Month | Solar.R + Wind + Temp + Day, data = airq, ntrees = 10)
-airq.ens1
+airq.ens2 <- premixed(Ozone ~ Solar.R + Wind + Temp + Day, cluster = "Month", data = airq, 
+  ntrees = 10)
+airq.ens2
 
 
 

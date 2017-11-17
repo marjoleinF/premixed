@@ -11,4 +11,4 @@ import("glmertree")
 import("lme4")
 import("glmnet")
 
-importFrom("stats", "coef", "predict")
+importFrom("stats", "coef", "predict", "logLik")

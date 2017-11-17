@@ -13,9 +13,12 @@
 #' speed up computations, but may yield a less accurate model, depending on the 
 #' magnitude of the random effects.
 #' @param conv.thresh numeric vector of length 1, specifies the convergence
-#' criterion. The algorithm converges if the maximum absolute difference in 
-#' random-effects predictions from one iteration is smaller than 
-#' \code{conv.thresh}.
+#' criterion for estimation of the model. If \code{ridge.ranef = FALSE}, it 
+#' specifies the maximum difference in log-likelihoods of the random-effects 
+#' model from two consecutive iterations for estimation to converge. If
+#' \code{ridge.ranef = TRUE}, it specifies the maximum absolute difference in 
+#' random-effects predictions from two consecutive iterations for estimation
+#' to converge.
 #' @param penalty.par.val as usual.
 #' @param learnrate as usual.
 #' @param use.grad as usual.
@@ -70,8 +73,9 @@
 #' ## only:
 #' set.seed(42)
 #' airq <- airquality[complete.cases(airquality),]
-#' airq.ens1 <- premixed(Ozone ~ 1 | Month | Solar.R + Wind + Temp + Day, data = airq, ntrees = 10)
-#' airq.ens1
+#' airq.ens2 <- premixed(Ozone ~ Solar.R + Wind + Temp + Day, cluster = "Month", data = airq, 
+#'   ntrees = 10)
+#' airq.ens2
 #' 
 #' 
 #' 
@@ -131,7 +135,7 @@
 #' }
 #' 
 premixed <- function(formula, cluster = NULL, data, penalty.par.val = "lambda.min", 
-                        learnrate = 0, use.grad = FALSE, conv.thresh = .01, 
+                        learnrate = 0, use.grad = FALSE, conv.thresh = .001, 
                         family = "gaussian", ridge.ranef = FALSE, max.iter = 1000, ...) {
   
   cat("estimating rules...\n")
@@ -171,6 +175,7 @@ premixed <- function(formula, cluster = NULL, data, penalty.par.val = "lambda.mi
   dif <- conv.thresh + 1
   ranef1 <- list()
   fixef1 <- list()
+  oldloglik <- -Inf
   
   ## TODO: pre-create sparse matrix for ranef and fixef
   ## TODO: ridge regression lambda parameter should be equal to something of the error variance. 
@@ -187,6 +192,9 @@ premixed <- function(formula, cluster = NULL, data, penalty.par.val = "lambda.mi
       ranef_preds <- predict(ranef, newx = ranef_des_mat, s = "lambda.min", 
                              newoffset = 0, type = "link")
       ranef1[[iteration]] <- coef(ranef, s = "lambda.min")
+      if (iteration > 1) {
+        dif <- max(abs(ranef1[[iteration]] - ranef1[[iteration-1]]))
+      }
     } else {
       if (family == "gaussian") { ## fit lmer:
         ranef <- lmer(glmer_f, data = glmer_data)
@@ -199,6 +207,9 @@ premixed <- function(formula, cluster = NULL, data, penalty.par.val = "lambda.mi
         glmer_data$fixef_preds <- 0        
         ranef_preds <- predict(ranef, newdata = glmer_data, type = "link")
       }
+      newloglik <- logLik(ranef)    
+      dif <- newloglik - oldloglik 
+      oldloglik <- newloglik
     }
     ## Step 2: estimate fixed effects, given random-effects coefficients:
     fixef <- cv.glmnet(x = pre_mod$modmat, y = pre_mod$data[, pre_mod$y_name], 
@@ -213,9 +224,6 @@ premixed <- function(formula, cluster = NULL, data, penalty.par.val = "lambda.mi
                                         type = "link")
     }
     fixef1[[iteration]] <- coef(fixef, s = "lambda.min")
-    if (iteration > 1) {
-      dif <- max(abs(ranef1[[iteration]] - ranef1[[iteration-1]]))
-    }
   }
   if (iteration == max.iter) {
     warning("Estimation of random and fixed effects stopped, but did not converge before reaching the maximum number of iterations.")
